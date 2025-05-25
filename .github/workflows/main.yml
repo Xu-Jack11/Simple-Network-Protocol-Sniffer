@@ -25,16 +25,20 @@ jobs:
       shell: powershell
       run: |
         Invoke-WebRequest -Uri "https://npcap.com/dist/npcap-1.79.exe" -OutFile "npcap-installer.exe"
-        Start-Process -FilePath ".\npcap-installer.exe" -ArgumentList "/S", "/winpcap_mode=yes", "/loopback_support=no" -Wait
+        Start-Process -FilePath ".\\npcap-installer.exe" -ArgumentList "/S", "/winpcap_mode=yes", "/loopback_support=no" -Wait
         Write-Host "Npcap installation completed. Path: $env:PATH"
         # Verify Npcap installation by checking for a common DLL, adjust if necessary
-        if (Test-Path "C:\Windows\System32\Npcap\wpcap.dll") {
+        if (Test-Path "C:\\Windows\\System32\\Npcap\\wpcap.dll") {
           Write-Host "Npcap wpcap.dll found."
         } else {
-          Write-Host "Npcap wpcap.dll NOT found. Listing System32\Npcap contents:"
-          Get-ChildItem "C:\Windows\System32\Npcap" || Write-Host "Npcap directory not found or empty."
+          Write-Host "Npcap wpcap.dll NOT found. Listing System32\\Npcap contents:"
+          if (Test-Path "C:\\Windows\\System32\\Npcap") {
+            Get-ChildItem "C:\\Windows\\System32\\Npcap"
+          } else {
+            Write-Host "Npcap directory C:\\Windows\\System32\\Npcap not found."
+          }
           # Attempt to add Npcap to PATH explicitly if not found, though installer should handle this
-          # Add-Content $env:GITHUB_PATH "C:\Windows\System32\Npcap\"
+          # Add-Content $env:GITHUB_PATH "C:\\Windows\\System32\\Npcap\\"
         }
 
     - name: Install dependencies
