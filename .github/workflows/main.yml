@@ -21,40 +21,87 @@ jobs:
       with:
         python-version: '3.13.3' # Specify Python version
 
-    - name: Install Npcap via Chocolatey
+    - name: Install Npcap directly
       shell: powershell
       run: |
-        Write-Host "Upgrading Chocolatey..."
-        choco upgrade chocolatey -y --no-progress
-        Write-Host "Chocolatey upgrade attempt complete."
+        Write-Host "Attempting to install Npcap directly..."
+        $NpcapInstallerUrl = "https://npcap.com/dist/npcap-1.79.exe"
+        $NpcapInstallerPath = ".\\npcap-installer.exe"
+        # Silent install, WinPcap API-compatible mode, no loopback adapter, restrict to admins
+        $NpcapInstallParams = "/S /winpcap_mode=yes /loopback_support=no /admin_only=yes"
 
-        Write-Host "Installing Npcap using Chocolatey..."
-        # Explicitly specify the source and allow downgrade if a newer broken version was somehow cached.
-        choco install npcap -s https://community.chocolatey.org/api/v2/ --params="'/S /winpcap_mode=yes /loopback_support=no'" --yes --force --allow-downgrade --no-progress
-        Write-Host "Npcap installation via Chocolatey attempted."
-        
-        # Verify Npcap installation by checking for a common DLL
-        $NpcapDllPath = "C:\\Windows\\System32\\Npcap\\wpcap.dll"
-        if (Test-Path $NpcapDllPath) {
-          Write-Host "Npcap wpcap.dll found at $NpcapDllPath."
-        } else {
-          Write-Warning "Npcap wpcap.dll NOT found at $NpcapDllPath."
-          Write-Host "Listing C:\\Windows\\System32\\Npcap contents (if directory exists):"
-          if (Test-Path "C:\\Windows\\System32\\Npcap") {
-            Get-ChildItem "C:\\Windows\\System32\\Npcap"
-          } else {
-            Write-Warning "Npcap directory C:\\Windows\\System32\\Npcap not found."
-          }
-          # Consider failing the build if Npcap is critical and not found
-          # exit 1 
+        try {
+            Write-Host "Downloading Npcap installer from $NpcapInstallerUrl..."
+            Invoke-WebRequest -Uri $NpcapInstallerUrl -OutFile $NpcapInstallerPath -UseBasicParsing
+            Write-Host "Npcap installer downloaded to $NpcapInstallerPath."
+
+            Write-Host "Running Npcap installer with arguments: $NpcapInstallParams"
+            $process = Start-Process -FilePath $NpcapInstallerPath -ArgumentList $NpcapInstallParams -Wait -PassThru -ErrorAction Stop
+
+            if ($process.ExitCode -ne 0) {
+                Write-Error "Npcap installer exited with code $($process.ExitCode)."
+                # Attempt to dump installer logs if they exist
+                $NpcapProgramFilesLog = "C:\\Program Files\\Npcap\\install.log"
+                if (Test-Path $NpcapProgramFilesLog) {
+                    Write-Host "Npcap install log content (Program Files):"
+                    Get-Content $NpcapProgramFilesLog | ForEach-Object { Write-Host $_ }
+                }
+                # Check for logs in ProgramData as well, as some installers might use it
+                $NpcapProgramDataLog = "C:\\ProgramData\\Npcap\\install.log"
+                if (Test-Path $NpcapProgramDataLog) {
+                    Write-Host "Npcap install log content (ProgramData):"
+                    Get-Content $NpcapProgramDataLog | ForEach-Object { Write-Host $_ }
+                }
+                exit $process.ExitCode
+            } else {
+                Write-Host "Npcap installer finished successfully."
+            }
+        } catch {
+            Write-Error "An error occurred during Npcap direct installation: $($_.Exception.Message)"
+            if (-not (Test-Path $NpcapInstallerPath)) {
+                Write-Error "Npcap installer executable not found after download attempt."
+            }
+            exit 1
         }
-        # Ensure Npcap directory is in PATH if scapy still has issues finding it
-        # Although choco and npcap installer should handle this.
-        # $NpcapSystemDir = "C:\\Windows\\System32\\Npcap"
-        # if ($env:PATH -notlike "*$NpcapSystemDir*") {
-        #   Write-Host "Adding $NpcapSystemDir to GITHUB_PATH"
-        #   Add-Content $env:GITHUB_PATH "$NpcapSystemDir"
-        # }
+
+        # Verify Npcap installation by checking for a common DLL and service
+        $NpcapDllPath = "C:\\Windows\\System32\\Npcap\\wpcap.dll"
+        $NpcapSysDir = "C:\\Windows\\System32\\Npcap"
+        $NpcapProgramFilesDir = "C:\\Program Files\\Npcap"
+
+        if (Test-Path $NpcapDllPath) {
+            Write-Host "Npcap wpcap.dll found at $NpcapDllPath."
+            try {
+                $service = Get-Service -Name npcap -ErrorAction SilentlyContinue
+                if ($service) {
+                    Write-Host "Npcap service (npcap) status: $($service.Status)"
+                } else {
+                    Write-Warning "Npcap service (npcap) not found."
+                }
+            } catch {
+                Write-Warning "Could not query Npcap service status: $($_.Exception.Message)"
+            }
+        } else {
+            Write-Warning "Npcap wpcap.dll NOT found at $NpcapDllPath after direct install attempt."
+            Write-Host "Listing $NpcapSysDir contents (if directory exists):"
+            if (Test-Path $NpcapSysDir) { Get-ChildItem $NpcapSysDir } else { Write-Warning "$NpcapSysDir not found."}
+            
+            Write-Host "Listing $NpcapProgramFilesDir contents (if directory exists):"
+            if (Test-Path $NpcapProgramFilesDir) { Get-ChildItem $NpcapProgramFilesDir -Recurse } else { Write-Warning "$NpcapProgramFilesDir not found."}
+            
+            Write-Error "Npcap installation failed or wpcap.dll is not in the expected location. Exiting."
+            exit 1
+        }
+
+        # Ensure Npcap directory is in PATH
+        if (Test-Path $NpcapSysDir) {
+            if ($env:PATH -notlike "*$NpcapSysDir*") {
+                Write-Host "Adding $NpcapSysDir to GITHUB_PATH"
+                Add-Content $env:GITHUB_PATH "$NpcapSysDir"
+            }
+        } else {
+            Write-Warning "$NpcapSysDir not found, cannot add to PATH. This might be an issue."
+        }
 
     - name: Install dependencies
       run: |
