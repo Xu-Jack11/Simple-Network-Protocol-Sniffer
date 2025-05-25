@@ -1,0 +1,135 @@
+name: Build and Release EXE
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on tags like v1.0, v1.2.3
+  workflow_dispatch: # Allows manual triggering
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write # Needed to create releases and upload assets
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.13.2' # Specify Python version
+
+    - name: Install Npcap
+      shell: powershell
+      run: |
+        Invoke-WebRequest -Uri "https://npcap.com/dist/npcap-1.79.exe" -OutFile "npcap-installer.exe"
+        Start-Process -FilePath ".\npcap-installer.exe" -ArgumentList "/S", "/winpcap_mode=yes", "/loopback_support=no" -Wait
+        Write-Host "Npcap installation completed. Path: $env:PATH"
+        # Verify Npcap installation by checking for a common DLL, adjust if necessary
+        if (Test-Path "C:\Windows\System32\Npcap\wpcap.dll") {
+          Write-Host "Npcap wpcap.dll found."
+        } else {
+          Write-Host "Npcap wpcap.dll NOT found. Listing System32\Npcap contents:"
+          Get-ChildItem "C:\Windows\System32\Npcap" || Write-Host "Npcap directory not found or empty."
+          # Attempt to add Npcap to PATH explicitly if not found, though installer should handle this
+          # Add-Content $env:GITHUB_PATH "C:\Windows\System32\Npcap\"
+        }
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    - name: Build EXE with PyInstaller
+      run: |
+        pyinstaller NetworkProtocolSniffer.spec
+        # Alternative direct command if not using .spec:
+        # pyinstaller --name NetworkProtocolSniffer --onefile --windowed --icon=icon.ico --add-data "ui;ui" --add-data "config.py;." --add-data "utils.py;." --hidden-import=PyQt5.sip --hidden-import=PyQt5.QtCore --hidden-import=PyQt5.QtGui --hidden-import=PyQt5.QtWidgets --hidden-import=scapy.all --hidden-import=matplotlib.pyplot --hidden-import=psutil --collect-all PyQt5 main.py
+
+    - name: Prepare Release Artifacts
+      shell: powershell
+      run: |
+        New-Item -ItemType Directory -Path "release_package" -Force
+        Copy-Item -Path "dist\NetworkProtocolSniffer.exe" -Destination "release_package\"
+        Copy-Item -Path "README.md" -Destination "release_package\"
+        $releaseContent = "# Network Protocol Sniffer`n`n## How to Run`n1. Ensure you have Npcap installed (comes with Wireshark or install separately).`n2. Right-click `NetworkProtocolSniffer.exe` and select 'Run as administrator'.`n`nSHA256 Checksum for EXE will be in the release notes."
+        Set-Content -Path "release_package\INSTRUCTIONS.txt" -Value $releaseContent
+        Compress-Archive -Path "release_package\*" -DestinationPath "NetworkProtocolSniffer-Windows.zip"
+
+    - name: Upload artifact for release
+      uses: actions/upload-artifact@v4
+      with:
+        name: NetworkProtocolSniffer-Windows
+        path: |
+          NetworkProtocolSniffer-Windows.zip
+          dist/NetworkProtocolSniffer.exe
+
+  create-release:
+    needs: build-windows
+    runs-on: ubuntu-latest # Can be windows-latest too
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write # Required to create a release
+
+    steps:
+    - name: Get tag version
+      id: get_version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: NetworkProtocolSniffer-Windows
+        path: release_artifacts
+
+    - name: Calculate SHA256 Checksum for EXE
+      shell: bash
+      run: |
+        cd release_artifacts
+        sha256sum NetworkProtocolSniffer.exe > sha256sum.txt
+        echo "SHA256_CHECKSUM=$(cat sha256sum.txt)" >> $GITHUB_ENV
+        cd ..
+
+    - name: Create GitHub Release
+      id: create_release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.get_version.outputs.VERSION }}
+        name: Network Protocol Sniffer ${{ steps.get_version.outputs.VERSION }}
+        body: |
+          ## Network Protocol Sniffer ${{ steps.get_version.outputs.VERSION }}
+
+          A simple network protocol sniffer with a GUI interface.
+
+          **Features:**
+          - Real-time packet capture
+          - Protocol parsing (TCP, UDP, ICMP, HTTP, DNS, ARP)
+          - Statistical charts
+          - Detailed packet analysis
+
+          **System Requirements:**
+          - Windows 10/11
+          - Npcap (WinPcap compatible mode)
+          - Administrator privileges for packet capture
+
+          **Files:**
+          - `NetworkProtocolSniffer.exe` (Standalone executable)
+          - `NetworkProtocolSniffer-Windows.zip` (Contains EXE, README, Instructions)
+
+          **SHA256 Checksum:**
+          `${{ env.SHA256_CHECKSUM }}`
+
+          **Instructions:**
+          1. Download and extract `NetworkProtocolSniffer-Windows.zip` or download `NetworkProtocolSniffer.exe` directly.
+          2. Ensure Npcap is installed (e.g., by installing Wireshark or from [npcap.com](https://npcap.com)).
+          3. Right-click `NetworkProtocolSniffer.exe` and select "Run as administrator".
+        files: |
+          release_artifacts/NetworkProtocolSniffer-Windows.zip
+          release_artifacts/NetworkProtocolSniffer.exe
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
