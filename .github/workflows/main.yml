@@ -24,8 +24,13 @@ jobs:
     - name: Install Npcap via Chocolatey
       shell: powershell
       run: |
+        Write-Host "Upgrading Chocolatey..."
+        choco upgrade chocolatey -y --no-progress
+        Write-Host "Chocolatey upgrade attempt complete."
+
         Write-Host "Installing Npcap using Chocolatey..."
-        choco install npcap --params="'/S /winpcap_mode=yes /loopback_support=no'" --yes --force
+        # Explicitly specify the source and allow downgrade if a newer broken version was somehow cached.
+        choco install npcap -s https://community.chocolatey.org/api/v2/ --params="'/S /winpcap_mode=yes /loopback_support=no'" --yes --force --allow-downgrade --no-progress
         Write-Host "Npcap installation via Chocolatey attempted."
         
         # Verify Npcap installation by checking for a common DLL
