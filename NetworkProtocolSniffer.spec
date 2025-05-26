@@ -57,7 +57,8 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=app_icon,
-    version='version.txt' # Path to your version file
+    # Remove version file reference to avoid parse errors
+    # version=None
 )
 coll = COLLECT(
     exe,
