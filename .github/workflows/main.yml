@@ -27,11 +27,15 @@ jobs:
         pip install -r requirements.txt
         pip install pyinstaller
 
-    - name: Download and Install Npcap
+    - name: Create version file for PyInstaller
       shell: powershell
       run: |
-        Invoke-WebRequest -Uri "https://npcap.com/dist/npcap-1.79.exe" -OutFile "npcap-installer.exe"
-        Start-Process -FilePath "npcap-installer.exe" -ArgumentList "/S /winpcap_mode=yes /doreboot=no" -Wait
+        if ($env:GITHUB_REF -like 'refs/tags/*') {
+          $version = $env:GITHUB_REF -replace 'refs/tags/', ''
+        } else {
+          $version = '0.0.0'
+        }
+        Set-Content -Path version.txt -Value $version
 
     - name: Build EXE with PyInstaller
       run: |
@@ -79,8 +83,7 @@ jobs:
       shell: bash
       run: |
         cd release_artifacts
-        sha256sum NetworkProtocolSniffer.exe > sha256sum.txt
-        echo "SHA256_CHECKSUM=$(cat sha256sum.txt)" >> $GITHUB_ENV
+        echo "SHA256_CHECKSUM=$(sha256sum NetworkProtocolSniffer.exe | awk '{ print $1 }')" >> $GITHUB_ENV
         cd ..
 
     - name: Create GitHub Release
