@@ -47,7 +47,7 @@ jobs:
       shell: powershell
       run: |
         New-Item -ItemType Directory -Path "release_package" -Force
-        Copy-Item -Path "dist\NetworkProtocolSniffer.exe" -Destination "release_package\"
+        Copy-Item -Path "dist\NetworkProtocolSniffer\NetworkProtocolSniffer.exe" -Destination "release_package\"
         Copy-Item -Path "README.md" -Destination "release_package\"
         $releaseContent = "# Network Protocol Sniffer`n`n## How to Run`n1. Ensure you have Npcap installed (comes with Wireshark or install separately).`n2. Right-click `NetworkProtocolSniffer.exe` and select 'Run as administrator'.`n`nSHA256 Checksum for EXE will be in the release notes."
         Set-Content -Path "release_package\INSTRUCTIONS.txt" -Value $releaseContent
@@ -59,7 +59,7 @@ jobs:
         name: NetworkProtocolSniffer-Windows
         path: |
           NetworkProtocolSniffer-Windows.zip
-          dist/NetworkProtocolSniffer.exe
+          dist/NetworkProtocolSniffer/NetworkProtocolSniffer.exe
 
   create-release:
     needs: build-windows
