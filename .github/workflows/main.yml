@@ -34,16 +34,14 @@ jobs:
           $version = $env:GITHUB_REF -replace 'refs/tags/', ''
         } else {
           $version = '0.0.0'
-        }
-        Set-Content -Path version.txt -Value $version
+        }        Set-Content -Path version.txt -Value $version
 
     - name: Build EXE with PyInstaller
       run: |
-        # 使用 onefile 模式打包，包含 Python DLL
-        pyinstaller --name NetworkProtocolSniffer --onefile --windowed --icon=icon.ico |
-          --add-data "ui;ui" --add-data "config.py;." --add-data "utils.py;." |
-          --hidden-import=PyQt5.sip --hidden-import=PyQt5.QtCore --hidden-import=PyQt5.QtGui |
-          --hidden-import=PyQt5.QtWidgets --hidden-import=scapy.all --hidden-import=matplotlib.pyplot |
+        pyinstaller --name NetworkProtocolSniffer --onefile --windowed --icon=icon.ico `
+          --add-data "ui;ui" --add-data "config.py;." --add-data "utils.py;." `
+          --hidden-import=PyQt5.sip --hidden-import=PyQt5.QtCore --hidden-import=PyQt5.QtGui `
+          --hidden-import=PyQt5.QtWidgets --hidden-import=scapy.all --hidden-import=matplotlib.pyplot `
           --hidden-import=psutil --collect-all PyQt5 main.py
 
     - name: Prepare Release Artifacts
