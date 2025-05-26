@@ -3,7 +3,7 @@
 """
 
 from .main_window import MainWindow
-from .packet_sniffer import PacketSniffer#, TSharkSniffer
+from .packet_sniffer import PacketSniffer
 from .packet_analyzer import PacketAnalyzer
 
-__all__ = ['MainWindow', 'PacketSniffer', 'TSharkSniffer', 'PacketAnalyzer']
+__all__ = ['MainWindow', 'PacketSniffer', 'PacketAnalyzer']
