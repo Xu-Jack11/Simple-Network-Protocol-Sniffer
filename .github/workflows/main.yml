@@ -26,9 +26,12 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install pyinstaller
-    - name: Install Npcap via Chocolatey
+
+    - name: Download and Install Npcap
       shell: powershell
-      run: choco install npcap -y --params '"/winpcap_mode=yes"'
+      run: |
+        Invoke-WebRequest -Uri "https://npcap.com/dist/npcap-1.79.exe" -OutFile "npcap-installer.exe"
+        Start-Process -FilePath "npcap-installer.exe" -ArgumentList "/S /winpcap_mode=yes /doreboot=no" -Wait
 
     - name: Build EXE with PyInstaller
       run: |
