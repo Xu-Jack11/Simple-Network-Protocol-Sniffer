@@ -38,7 +38,7 @@ jobs:
 
     - name: Build EXE with PyInstaller
       run: |
-        pyinstaller --name NetworkProtocolSniffer --onefile --windowed --icon=icon.ico `
+        pyinstaller --name NetworkProtocolSniffer --onefile --windowed `
           --add-data "ui;ui" --add-data "config.py;." --add-data "utils.py;." `
           --hidden-import=PyQt5.sip --hidden-import=PyQt5.QtCore --hidden-import=PyQt5.QtGui `
           --hidden-import=PyQt5.QtWidgets --hidden-import=scapy.all --hidden-import=matplotlib.pyplot `

@@ -12,7 +12,7 @@ datas = [
 ]
 
 # Add an icon if you have one, e.g., icon.ico in the root directory
-app_icon = 'icon.ico' if os.path.exists('icon.ico') else None
+app_icon = None
 
 a = Analysis(
     ['main.py'],
