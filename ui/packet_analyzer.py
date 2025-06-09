@@ -5,6 +5,7 @@ from scapy.layers.l2 import Ether, ARP
 from scapy.layers.inet6 import IPv6
 from scapy.layers.http import HTTP, HTTPRequest, HTTPResponse
 from scapy.layers.dns import DNS, DNSQR, DNSRR
+import re
 
 
 class PacketAnalyzer:
@@ -67,6 +68,14 @@ class PacketAnalyzer:
                     
                     # 更新主要信息
                     self._update_main_info(packet_info, layer_name, layer_info)
+                    # 深入解析FTP应用层
+                    if layer_name == 'TCP' and (layer_info.get('源端口') == 21 or layer_info.get('目的端口') == 21):
+                        payload = current_layer.payload
+                        if hasattr(payload, 'load'):
+                            ftp_info = self._parse_ftp(payload)
+                            if ftp_info:
+                                packet_info['layers'][f"{layer_index+1:02d}_FTP"] = ftp_info
+                                packet_info['protocol'] = 'FTP'
                 except Exception as e:
                     print(f"解析{layer_name}层时出错: {str(e)}")
                     
@@ -294,6 +303,29 @@ class PacketAnalyzer:
             
         return http_info
         
+    def _parse_ftp(self, layer):
+        """解析FTP层"""
+        ftp_info = {}
+        try:
+            if hasattr(layer, 'load'):
+                data = layer.load.decode(errors='ignore') if isinstance(layer.load, bytes) else str(layer.load)
+                lines = data.split('\r\n')
+                commands = []
+                responses = []
+                for line in lines:
+                    if line:
+                        if re.match(r'^\d{3}', line):
+                            responses.append(line)
+                        else:
+                            commands.append(line)
+                if commands:
+                    ftp_info['命令'] = "; ".join(commands)
+                if responses:
+                    ftp_info['响应'] = "; ".join(responses)
+        except Exception:
+            pass
+        return ftp_info
+        
     def _update_main_info(self, packet_info, layer_name, layer_info):
         """更新数据包主要信息"""
         if layer_name == 'IP':
@@ -342,7 +374,7 @@ class PacketAnalyzer:
             if src_port and dst_port:
                 packet_info['info'] = f"{src_port} → {dst_port}"
             else:
-                packet
+                packet_info['info'] =f"Unknown"
             icmp_layer = packet_info['layers'].get('02_ICMP', {})
             icmp_type = icmp_layer.get('类型', '')
             packet_info['info'] = icmp_type
@@ -369,5 +401,11 @@ class PacketAnalyzer:
                 reason = http_layer.get('原因短语', '')
                 packet_info['info'] = f"{status} {reason}"
                 
+        elif protocol == 'FTP':
+            # FTP应用层摘要
+            ftp_layer = next((layer for layer_name, layer in packet_info['layers'].items() if '_FTP' in layer_name), {})
+            cmd = ftp_layer.get('命令', '')
+            resp = ftp_layer.get('响应', '')
+            packet_info['info'] = cmd if cmd else resp
         else:
             packet_info['info'] = f"{src_ip} → {dst_ip}" if src_ip and dst_ip else "Unknown"
