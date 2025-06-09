@@ -7,14 +7,15 @@ from collections import defaultdict
 
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                            QMenuBar, QToolBar, QTreeWidget, QTreeWidgetItem,
-                           QTextEdit, QSplitter, QLabel, QComboBox, QPushButton,
+                           QPlainTextEdit, QSplitter, QLabel, QComboBox, QPushButton,
                            QLineEdit, QGroupBox, QTabWidget, QTableWidget,
                            QTableWidgetItem, QHeaderView, QMessageBox,
-                           QProgressBar, QStatusBar, QAction)
+                           QProgressBar, QStatusBar, QAction, QToolTip)
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QThread
 from PyQt5.QtGui import QIcon, QFont, QColor
 
 import matplotlib.pyplot as plt
+import math
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import psutil
@@ -73,6 +74,8 @@ class StatisticsCanvas(FigureCanvas):
         # 创建子图
         self.protocol_ax = self.fig.add_subplot(211)
         self.traffic_ax = self.fig.add_subplot(212)
+        # 绑定鼠标悬停事件，用于显示包数提示
+        self.mpl_connect('motion_notify_event', self.on_hover)
         
         self.protocol_data = defaultdict(int)
         self.traffic_data = []
@@ -86,13 +89,33 @@ class StatisticsCanvas(FigureCanvas):
         if protocol_counts:
             protocols = list(protocol_counts.keys())
             counts = list(protocol_counts.values())
+            total = sum(counts)
+            # 只有占比>=5%时才显示标签
+            labels = [f if (counts[i] / total * 100) >= 5 else '' for i, f in enumerate(protocols)]
             # 使用配置中的协议颜色映射
             colors = [PROTOCOL_COLORS.get(proto, PROTOCOL_COLORS.get('Unknown', '#CCCCCC')) for proto in protocols]
-            wedges, texts, autotexts = self.protocol_ax.pie(
-                counts, labels=protocols, autopct='%1.1f%%',
-                colors=colors, startangle=90
+            # 扇区文本全部放置在外部，并使用引导线
+            wedges, texts = self.protocol_ax.pie(
+                counts, labels=labels, autopct=None,
+                colors=colors, startangle=90,
+                labeldistance=1.1, pctdistance=0.8,
+                wedgeprops={'linewidth': 1, 'edgecolor': 'white'}
             )
+            # 自动添加百分比文本在外部
+            for i, wedge in enumerate(wedges):
+                pct = counts[i] / total * 100
+                if pct < 5:
+                    continue
+                angle = (wedge.theta2 + wedge.theta1) / 2
+                x = math.cos(math.radians(angle)) * 1.2
+                y = math.sin(math.radians(angle)) * 1.2
+                self.protocol_ax.text(x, y, f"{counts[i]} ({pct:.1f}%)",
+                                     ha='center', va='center', fontsize=10)
             self.protocol_ax.set_title('协议分布统计', fontsize=12, fontweight='bold')
+            # 保存扇区和数据用于悬停
+            self._wedges = wedges
+            self._protocols = protocols
+            self._counts = counts
             
         self.draw()
         
@@ -130,6 +153,23 @@ class StatisticsCanvas(FigureCanvas):
                                           rotation=45, fontsize=8)
         
         self.draw()
+    
+    def on_hover(self, event):
+        """鼠标悬停时在对应扇区显示包数提示"""
+        if event.inaxes != self.protocol_ax:
+            QToolTip.hideText()
+            return
+        for wedge, proto, cnt in zip(getattr(self, '_wedges', []), getattr(self, '_protocols', []), getattr(self, '_counts', [])):
+            contains, _ = wedge.contains(event)
+            if contains:
+                # 使用全局坐标显示工具提示
+                try:
+                    pos = event.guiEvent.globalPos()
+                except:
+                    pos = None
+                QToolTip.showText(pos, f"{proto}: {cnt} 个包")
+                return
+        QToolTip.hideText()
 
 
 class MainWindow(QMainWindow):
@@ -241,7 +281,8 @@ class MainWindow(QMainWindow):
         """创建左侧面板"""
         left_widget = QWidget()
         layout = QVBoxLayout(left_widget)
-          # 数据包列表
+        
+        # 数据包列表
         packet_group = QGroupBox("数据包列表")
         packet_layout = QVBoxLayout(packet_group)
         
@@ -272,6 +313,22 @@ class MainWindow(QMainWindow):
         detail_layout.addWidget(self.detail_tree)
         
         layout.addWidget(detail_group)
+        # 添加原始数据展示区域
+        raw_group = QGroupBox("原始数据")
+        raw_layout = QVBoxLayout(raw_group)
+        # 使用 QPlainTextEdit 保持等宽列对齐
+        self.raw_text = QPlainTextEdit()
+        self.raw_text.setReadOnly(True)
+        # 指定等宽字体，优先 Consolas，回退 Courier New
+        from PyQt5.QtGui import QFont
+        mono_font = QFont("Consolas", 8)
+        if not mono_font.exactMatch():
+            mono_font = QFont("Courier New", 8)
+        self.raw_text.setFont(mono_font)
+        # 禁用自动换行以保持列对齐
+        self.raw_text.setLineWrapMode(QPlainTextEdit.NoWrap)
+        raw_layout.addWidget(self.raw_text)
+        layout.addWidget(raw_group)
         
         # 设置垂直分割比例
         left_widget.setMinimumWidth(600)
@@ -287,7 +344,8 @@ class MainWindow(QMainWindow):
         stats_group = QGroupBox("协议统计")
         stats_layout = QVBoxLayout(stats_group)
         
-        self.stats_canvas = StatisticsCanvas(right_widget, width=5, height=6, dpi=100)
+        # 改为将主窗口作为父对象，以便工具提示定位
+        self.stats_canvas = StatisticsCanvas(self, width=5, height=6, dpi=100)
         stats_layout.addWidget(self.stats_canvas)
         
         layout.addWidget(stats_group)
@@ -516,6 +574,22 @@ class MainWindow(QMainWindow):
                 field_item = QTreeWidgetItem(layer_item, [f"{field_name}: {field_value}"])
                 
         self.detail_tree.expandAll()
+        
+        # 显示原始数据
+        raw_data = packet_info.get('raw_data', '')
+        # 格式化原始字节为十六进制和 ASCII 对照显示，每行16字节
+        raw_bytes = packet_info.get('raw_bytes', b'')
+        lines = []
+        bytes_per_line = 16
+        for i in range(0, len(raw_bytes), bytes_per_line):
+            chunk = raw_bytes[i:i+bytes_per_line]
+            # 固定字节宽度，对短行使用空格占位
+            hex_vals = [f"{b:02x}" for b in chunk] + ['  '] * (bytes_per_line - len(chunk))
+            hex_part = ' '.join(hex_vals)
+            ascii_part = ''.join(chr(b) if 32 <= b <= 126 else '.' for b in chunk)
+            lines.append(f"{i:04x}  {hex_part}  {ascii_part}")
+        formatted = '\n'.join(lines)
+        self.raw_text.setPlainText(formatted)
         
     def update_statistics(self):
         """更新统计图表"""

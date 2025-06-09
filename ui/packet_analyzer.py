@@ -43,6 +43,11 @@ class PacketAnalyzer:
         
         # 生成简要信息
         self._generate_summary_info(packet_info)
+        # 添加原始数据字段，用十六进制展示
+        raw_bytes = bytes(packet)
+        # 添加原始字节序列以供 UI 格式化使用
+        packet_info['raw_bytes'] = raw_bytes
+        packet_info['raw_data'] = ' '.join(f"{b:02x}" for b in raw_bytes)
         
         return packet_info
         
@@ -337,9 +342,7 @@ class PacketAnalyzer:
             if src_port and dst_port:
                 packet_info['info'] = f"{src_port} → {dst_port}"
             else:
-                packet_info['info'] = f"{src_ip} → {dst_ip}"
-                
-        elif protocol == 'ICMP':
+                packet
             icmp_layer = packet_info['layers'].get('02_ICMP', {})
             icmp_type = icmp_layer.get('类型', '')
             packet_info['info'] = icmp_type
