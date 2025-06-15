@@ -8,7 +8,6 @@
 - 实时捕获网络数据包
 - 支持选择网络接口
 - 自定义过滤条件（按IP、端口、协议等）
-- 支持Scapy和TShark两种捕获方式
 
 ### 📊 协议解析
 - **网络层**: IP、IPv6、ARP、ICMP
@@ -40,8 +39,6 @@
 
 ### 操作系统
 - Windows 10/11 (推荐)
-- Linux (Ubuntu 18.04+)
-- macOS 10.14+
 
 ### Python版本
 - Python 3.7+
@@ -57,22 +54,22 @@
 - 下载地址: https://nmap.org/npcap/
 
 ## 安装指南
-
-### 1. 安装依赖
+### 方案一
+#### 下载Release中打包好的可执行程序并运行
+- 前往 [Releases 页面](https://github.com/Xu-Jack11/Simple-Network-Protocol-Sniffer/releases) 下载最新版本的可执行程序
+- 解压后直接运行，无需安装Python环境
+### 方案二
+#### 1. 安装依赖
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Windows额外步骤
+#### 2. Windows安装驱动
 - 下载并安装Npcap: https://nmap.org/npcap/
 - 安装时勾选"WinPcap API compatibility"选项
 
-### 3. 运行程序
-```bash
-python run.py
-```
+#### 3. 运行程序
 
-或直接运行：
 ```bash
 python main.py
 ```
