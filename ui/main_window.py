@@ -623,6 +623,9 @@ class MainWindow(QMainWindow):
                     packet_copy = packet_info.copy()
                     if 'raw_packet' in packet_copy:
                         del packet_copy['raw_packet']
+                    # 将原始字节数据转换为十六进制字符串，便于JSON序列化
+                    if 'raw_bytes' in packet_copy:
+                        packet_copy['raw_bytes'] = packet_copy['raw_bytes'].hex()
                     save_data['packets'].append(packet_copy)
                 
                 with open(file_path, 'w', encoding='utf-8') as f:
