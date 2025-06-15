@@ -655,6 +655,9 @@ class MainWindow(QMainWindow):
                 # 加载数据包
                 packets = data.get('packets', [])
                 for packet_info in packets:
+                    # 将 raw_bytes 字段从十六进制字符串还原为 bytes
+                    if 'raw_bytes' in packet_info:
+                        packet_info['raw_bytes'] = bytes.fromhex(packet_info['raw_bytes'])
                     self.captured_packets.append(packet_info)
                     self.packet_count += 1
                     
